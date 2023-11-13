@@ -3,11 +3,9 @@
 首先创建一个文件夹data 
 
 # html_url_baidu.py
-在第215行 name_list中添加要搜索的name
-第153 exc_list 为“黑名单”，将不需要的字符段加入该列表，例如想屏蔽 “请编辑这个对象”，那么加入其中的连续字符例如“这个对象”即可
-
+在最下面 name_list中添加要搜索的name
+exc_list 为“黑名单”，将不需要的字符片段加入该列表
+name的相关json和csv会保存到相应的文件夹
 
 # html_url_wiki.py
-在第202行 name_list中添加要搜索的name
-第1139 exc_list 为“黑名单”，将不需要的字符段加入该列表
-
+同理
