@@ -1,7 +1,5 @@
 # baike_wiki
 # 两个py文件分别处理baidu和wiki的网页信息
-首先创建一个文件夹data，包含两个子文件夹Baidubaike和Wikibaike
-Baidubaike包含item_nodes和relationships
 
 # html_url_baidu.py
 在最下面 name_list中添加要搜索的name
