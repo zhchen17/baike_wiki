@@ -5,8 +5,10 @@ from urllib.parse import unquote
 import json
 from zhconv import convert
 import csv
+import os
 import re
 """读取html文件"""
+
 def extract_links_and_names_from_html(html_file_path):
     with open(html_file_path, 'r', encoding='utf-8') as file:
         html_content = file.read()
@@ -106,7 +108,7 @@ def remove_citations(text):
     return cleaned_text
 
 import time
-def main(name,index):
+def main(name,index,exc_list,item_path,cat_path,csv_path):
     # 直接输入URl
     time.sleep(5)
     html = f"https://zh.wikipedia.org/wiki/{name}" # HTML页面的URL
@@ -132,12 +134,10 @@ def main(name,index):
     relationships = [] # csv
     # 把主页信息存为第一个
     main_page = {}
-    main_page["name"],main_page["url"]= decode_wiki_link(html)
+    main_page["name"] = name
+    _,main_page["url"]= decode_wiki_link(html)
     main_page["des"] = ""
     nodes.append(main_page)
-
-    exc_list = ["条目","页面","本人编辑","日期","不匹配","(en)","GND","HKCAN","ISNI","CALIS","NLC","LCCN","NTA","VIAF","AAT","BNE","J9U","BNF","LNB","NDL","NKC","SUDOC","NLA","互联网档案馆",
-                "MSC分类标准","DBLP","本地和维基数据均无相关图片"]
     for entity in entities:
         state = 0
         result_dict = {}
@@ -174,6 +174,15 @@ def main(name,index):
             if main_page["name"].split('/')[-1] != result_dict["url"].split('/')[-1]:
                 # if result_dict["url"].split('/')[-1][:8] != "Category": # 移除了类别，后续考虑保留
                 relationships.append(result_dict["url"])
+
+            new_name = result_dict["url"].split('/')[-1]
+            if "Category:" in new_name:
+                new_name = new_name.split(':')[-1]
+            if result_dict["name"].split('/')[-1] != new_name:
+                a = result_dict["name"]
+                b = new_name
+                # print(f"把{a}改为{b}")
+                result_dict["name"] = result_dict["url"].split('/')[-1]
             nodes.append(result_dict)
 
 
@@ -192,12 +201,12 @@ def main(name,index):
     json_name = main_page["name"]+"wiki_nodes.json"
     csv_name = main_page["name"]
 
-    with open(f"./data/Wikipedia/item_nodes/{index+1}.json", "w", encoding="utf-8") as json_file: # 保存json
+    with open(item_path+f"{index+1}.json", "w", encoding="utf-8") as json_file: # 保存json
         json.dump(item_nodes, json_file, ensure_ascii=False, indent=2)
-    with open(f"./data/Wikipedia/Category_nodes/{index+1}.json", "w", encoding="utf-8") as json_file: # 保存json
+    with open(cat_path+f"{index+1}.json", "w", encoding="utf-8") as json_file: # 保存json
         json.dump(cate_nodes, json_file, ensure_ascii=False, indent=2)
 
-    write_csv_file(f"./data/Wikipedia/relationships/{index+1}",main_page["url"],"Contain",relationships) #保存为CSV
+    write_csv_file(csv_path+f"{index+1}",main_page["url"],"Contain",relationships) #保存为CSV
 
 name_list = ['吴信东',
 '倪岳峰',
@@ -211,6 +220,21 @@ name_list = ['吴信东',
 '人工智能',
 '中国工程院院士']
 
+exc_list = ["条目","页面","本人编辑","日期","不匹配","(en)","GND","HKCAN","ISNI","CALIS","NLC","LCCN","NTA","VIAF","AAT","BNE","J9U","BNF","LNB","NDL","NKC","SUDOC","NLA","互联网档案馆",
+                "MSC分类标准","DBLP","本地和维基数据均无相关图片",'在世人物',"关系标识符","中华人民共和国省会列表"]
+
+item_path = './data/Wikipedia/item_nodes/' # item路径
+cat_path = './data/Wikipedia/Category_nodes/' # catgory路径
+csv_path = './data/Wikipedia/relationships/' # 关系路径
+#自动创建文件夹
+if not os.path.exists(item_path):
+    os.makedirs(item_path)
+if not os.path.exists(cat_path):
+    os.makedirs(cat_path)
+if not os.path.exists(csv_path):
+    os.makedirs(csv_path)
+
+
 for index,name in enumerate(name_list):
     print(name)
-    main(name,index)
+    main(name,index,exc_list,item_path,cat_path,csv_path)

@@ -5,8 +5,10 @@ from urllib.parse import unquote
 import json
 from zhconv import convert
 import csv
-from findDescription import main
+# from findDescription import main
 import re
+import os
+from fake_useragent import UserAgent
 
 def remove_citations(text):
     # 使用正则表达式匹配引用符号并替换为空字符串
@@ -15,10 +17,12 @@ def remove_citations(text):
     cleaned_text = re.sub(r'\s+', '', cleaned_text).strip()
     return cleaned_text
 
-def extract_baidu_baike_content(url, target_class="lemmaSummary_qwEmi J-summary"):
+def extract_baidu_baike_content(url, target_class="lemma-summary J-summary"):
     try:
         # 发送 GET 请求
-        response = requests.get(url)
+        headers = {'User-Agent': UserAgent().random}
+        response = requests.get(url, headers=headers, timeout=5)
+
         # 检查响应状态码
         response.raise_for_status()
         # 使用 BeautifulSoup 解析网页内容
@@ -75,25 +79,37 @@ def traditional_to_simplified(traditional_text): # 繁体转简体
 
 """URL编解码"""
 def decode_wiki_link(encode_link):
-    link = encode_link.split("/item/")[-1]
-    new_link = encode_link
-
-    if '?' in link:
-        new_link = link.split('?')[0]
-        if encode_link[:8] != "https://":  # 如果url不完整
-            encode_link = "https://baike.baidu.com/item/" + new_link  # 补全url
-        else:
-            encode_link = encode_link.split('?')[0]
-
-    if "/" in link:
-        link = link.split("/")[0]
-    elif "?" in link:
-        link = link.split("?")[0]
-    decoded_link = unquote(link)
+    if encode_link[:8] != "https://":
+        encode_link = "https://baike.baidu.com" + encode_link
+    link_name = encode_link.split("/item/")[-1]
+    if '?' in link_name:
+        link_name = link_name.split('?')[0]
+    if '/' in link_name:
+        link_name = link_name.split('/')[0]
+    decoded_link = unquote(link_name)
     simplified_decoded_link = traditional_to_simplified(decoded_link)
-    final_link = encode_link.replace(link,simplified_decoded_link)
+    final_link = encode_link.replace(link_name,simplified_decoded_link)
+    return simplified_decoded_link, final_link
 
-    return simplified_decoded_link,final_link
+# def decode_wiki_link(encode_link):
+#     link = encode_link.split("/item/")[-1]
+#     new_link = encode_link
+#
+#     if '?' in link:
+#         new_link = link.split('?')[0]
+#         if encode_link[:8] != "https://":  # 如果url不完整
+#             encode_link = "https://baike.baidu.com/item/" + new_link  # 补全url
+#         else:
+#             encode_link = encode_link.split('?')[0]
+#
+#     if "/" in link:
+#         link = link.split("/")[0]
+#
+#     decoded_link = unquote(link)
+#     simplified_decoded_link = traditional_to_simplified(decoded_link)
+#     final_link = encode_link.replace(link,simplified_decoded_link)
+#
+#     return simplified_decoded_link,final_link
 
 
 "url去重"
@@ -126,7 +142,7 @@ def write_csv_file(name,head,relationship,tail):
 
 # if __name__ == "__main__":
     # 直接输入URlhttps://baike.baidu.com/item/%E5%9B%BE%E8%AE%BA/1433806
-def mains(index,name):
+def mains(index,name,exc_list,json_path,csv_path):
     html = f"https://baike.baidu.com/item/{name}" # HTML页面的URL
 
     response = requests.get(html)
@@ -150,14 +166,13 @@ def mains(index,name):
    # main_page["timestamp"] = datetime.now().strftime("%Y%m%d")
     nodes.append(main_page)
     # 黑名单
-    exc_list=['秒懂本尊答','秒懂大师说','秒懂看瓦特','秒懂五千年','秒懂全视界','百科热词团队','百度百科：多义词','百度','百度热词团队','百度百科：本人词条编辑服务','义项','本人编辑','热词团',"多义词",'义项','锁定']
     del_list = []
     for entity in entities:
         result_dict = {}
         entity_name = entity.text
         entity_url = entity.get('href')
         print('实体名称:', entity_name)
-        print('对应URL:', entity_url)
+        # print('对应URL:', entity_url)
 
         if is_wikipedia_url(entity_url) is False:  # 判断是否是维基百科
             continue
@@ -180,21 +195,23 @@ def mains(index,name):
             if result_dict["name"] == "":
                 continue
             _,result_dict["url"] = decode_wiki_link(entity_url) # 存放url
+            relationships.append(result_dict["url"])
             # print(result_dict["url"])
             # result_dict["timestamp"] = datetime.now().strftime("%Y%m%d") #存放时间戳
-            if main_page["name"].split('/item/')[-1].split('/')[0] != result_dict["url"].split('/item/')[-1].split('/')[0] :
-                last_slash_index = result_dict["url"].rfind('/') # 去掉最后的编码
-                url = result_dict["url"][:last_slash_index] # 这里先使用url暂代，不对result_dict["url"]直接修改，不然下面提取描述的时候，遇到多义词会因为没有编码而出现错误
-                relationships.append(url)
+            # if main_page["name"].split('/item/')[-1].split('/')[0] != result_dict["url"].split('/item/')[-1].split('/')[0] :
+            #     last_slash_index = result_dict["url"].rfind('/') # 去掉最后的编码
+            #     url = result_dict["url"][:last_slash_index] # 这里先使用url暂代，不对result_dict["url"]直接修改，不然下面提取描述的时候，遇到多义词会因为没有编码而出现错误
+            #     relationships.append(url)
 
             result_dict["des"] = extract_baidu_baike_content(result_dict["url"])
+            print(result_dict["des"])
             search = 0
             while result_dict["des"] is None and search<= 10:
                 result_dict["des"] = extract_baidu_baike_content(result_dict["url"])
                 search += 1
                 # print(f"执行第{search}次搜索")
-            last = result_dict["url"].rfind('/')
-            result_dict["url"] = result_dict["url"][:last]
+            # last = result_dict["url"].rfind('/')
+            # result_dict["url"] = result_dict["url"][:last]
             result_dict["des"] = remove_citations(result_dict["des"])
             nodes.append(result_dict)
 
@@ -204,13 +221,15 @@ def mains(index,name):
     # csv_name = main_page["name"]
     # print(f"该主页为:{csv_name}")
 
-    with open(f"./data/Baidubaike/nodes/{index+1}", "w", encoding="utf-8") as json_file: # 保存json
+    with open(json_path+f"{index+1}.json", "w", encoding="utf-8") as json_file: # 保存json
         json.dump(nodes, json_file, ensure_ascii=False, indent=2)
 
-    write_csv_file(f"./data/Baidubaike/relationships/{index+1}",main_page["url"],"Contain",relationships) #保存为CSV
+    write_csv_file(csv_path+f"{index+1}",main_page["url"],"Contain",relationships) #保存为CSV
     # print("本次删除的无效条目有：")
     # for i in del_list:
     #     print(i)
+
+
 
 name_list = ['吴信东',
 '倪岳峰',
@@ -225,6 +244,17 @@ name_list = ['吴信东',
 '人工智能',
 '中国工程院院士']
 
+exc_list = ['秒懂本尊答', '秒懂大师说', '秒懂看瓦特', '秒懂五千年', '秒懂全视界', '百科热词团队', '百度百科：多义词', '百度', '百度热词团队', '百度百科：本人词条编辑服务', '义项',
+            '本人编辑', '热词团', "多义词", '义项', '锁定']
+
+json_path = './data/Baidubaike/item_nodes/'
+csv_path = './data/Baidubaike/relationships/'
+
+if not os.path.exists(json_path):
+    os.makedirs(json_path)
+if not os.path.exists(csv_path):
+    os.makedirs(csv_path)
+
 for index,name in enumerate(name_list):
     print(name)
-    mains(index,name)
+    mains(index,name,exc_list,json_path,csv_path)
